@@ -1,0 +1,2 @@
+# Runtime dependency. The dev tools live in pyproject.toml.
+streamlit>=1.37
