@@ -1,4 +1,4 @@
-"""Levels: three doors dealt at random, one of each type."""
+"""Levels: four doors dealt at random, one of each type."""
 
 from __future__ import annotations
 
@@ -8,11 +8,11 @@ from mathcastle.constants import ENEMY_DAMAGE_BY_LEVEL, GOLD_BY_LEVEL
 from mathcastle.enemy import ENEMY_NAMES, Enemy
 from mathcastle.enums import RoomType
 from mathcastle.problem import ProblemGenerator
-from mathcastle.rooms import EmptyRoom, EnemyRoom, GoldRoom, Room
+from mathcastle.rooms import EmptyRoom, EnemyRoom, GoldRoom, Room, WallRoom
 
 
 class Level:
-    """One floor of the castle: one gold room, one empty room, one enemy."""
+    """One floor of the castle: one room of each of the four types."""
 
     def __init__(
         self,
@@ -28,18 +28,20 @@ class Level:
         self._rooms = self._build_rooms(source)
 
     def _build_rooms(self, source: random.Random) -> list[Room]:
-        """Deal the three room types at random and build each one."""
+        """Deal the four room types at random and build each one.
+
+        The builders are keyed by room type, so adding a type without
+        giving it a builder fails loudly instead of dealing fewer rooms.
+        """
+        builders = {
+            RoomType.GOLD: lambda: GoldRoom(GOLD_BY_LEVEL[self.number]),
+            RoomType.EMPTY: EmptyRoom,
+            RoomType.WALL: WallRoom,
+            RoomType.ENEMY: lambda: self._build_enemy(source),
+        }
         types = list(RoomType)
         source.shuffle(types)
-        rooms: list[Room] = []
-        for room_type in types:
-            if room_type is RoomType.GOLD:
-                rooms.append(GoldRoom(GOLD_BY_LEVEL[self.number]))
-            elif room_type is RoomType.EMPTY:
-                rooms.append(EmptyRoom())
-            else:
-                rooms.append(self._build_enemy(source))
-        return rooms
+        return [builders[room_type]() for room_type in types]
 
     def _build_enemy(self, source: random.Random) -> EnemyRoom:
         """Build this level's enemy with its first problem."""
@@ -57,11 +59,11 @@ class Level:
         return self._rooms[index]
 
     def available_rooms(self) -> list[int]:
-        """Door positions that have not been entered yet."""
+        """Door positions that are still fogged and may be opened."""
         return [
             index
             for index, room in enumerate(self._rooms)
-            if not room.visited
+            if room.is_choosable
         ]
 
     def enemy_room(self) -> EnemyRoom:
@@ -77,4 +79,4 @@ class Level:
 
     def __repr__(self) -> str:
         visited = sum(room.visited for room in self._rooms)
-        return f"Level({self.number}, visited={visited}/3)"
+        return f"Level({self.number}, visited={visited}/{len(self._rooms)})"

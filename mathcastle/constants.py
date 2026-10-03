@@ -7,8 +7,8 @@ documentation quote the same source of truth.
 #: Number of levels in the castle.
 TOTAL_LEVELS = 4
 
-#: Doors (rooms) on each level, dealt at random.
-ROOMS_PER_LEVEL = 3
+#: Doors (rooms) on each level, dealt at random: one of each room type.
+ROOMS_PER_LEVEL = 4
 
 #: Life points the player starts with.
 STARTING_LIFE_POINTS = 10

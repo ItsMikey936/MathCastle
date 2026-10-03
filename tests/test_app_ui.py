@@ -9,7 +9,12 @@ from pathlib import Path
 import pytest
 from streamlit.testing.v1 import AppTest
 
-from mathcastle.constants import GOLD_BY_LEVEL, TIME_LIMIT, TOTAL_LEVELS
+from mathcastle.constants import (
+    GOLD_BY_LEVEL,
+    ROOMS_PER_LEVEL,
+    TIME_LIMIT,
+    TOTAL_LEVELS,
+)
 from mathcastle.enums import GameState, RoomType
 from mathcastle.game import Game
 
@@ -65,6 +70,26 @@ def labels(app: AppTest) -> list[str]:
     ]
 
 
+def rendered(app: AppTest) -> str:
+    """Every scrap of text the app currently shows the player."""
+    parts: list[str] = []
+    for group in (
+        app.title,
+        app.subheader,
+        app.markdown,
+        app.caption,
+        app.code,
+        app.success,
+        app.error,
+        app.warning,
+        app.info,
+    ):
+        parts.extend(item.value for item in group)
+    parts.extend(metric.value for metric in app.metric)
+    parts.extend(button.label for button in app.button)
+    return " ".join(parts)
+
+
 def answer_current_problem(app: AppTest, raw: str) -> None:
     """Type into the answer box and press Attack."""
     serial = game_of(app).challenge_serial
@@ -101,13 +126,13 @@ def test_the_castle_is_not_dealt_before_the_player_starts():
     assert not labels(app)
 
 
-def test_starting_shows_the_map_the_hud_and_three_closed_doors():
+def test_starting_shows_the_map_the_hud_and_four_closed_doors():
     app = started()
     assert [header.value for header in app.subheader][:2] == [
         "🗺️ Castle map",
         "Level 1: choose a door",
     ]
-    assert len(labels(app)) == TOTAL_LEVELS * 3
+    assert len(labels(app)) == TOTAL_LEVELS * ROOMS_PER_LEVEL
     assert set(labels(app)) == {"🚪 ?"}
 
 
@@ -125,7 +150,7 @@ def test_only_the_doors_of_the_current_level_can_be_opened():
     enabled = {
         button.key for button in app.button if not button.disabled
     }
-    assert enabled == {"door-1-0", "door-1-1", "door-1-2", None}
+    assert enabled == {"door-1-0", "door-1-1", "door-1-2", "door-1-3", None}
 
 
 def test_a_closed_door_never_leaks_what_is_behind_it():
@@ -133,9 +158,67 @@ def test_a_closed_door_never_leaks_what_is_behind_it():
     index = door_of_type(app, 1, RoomType.ENEMY)
     app.button(key=f"door-1-{index}").click().run()
     shown = labels(app)
-    assert shown.count("🚪 ?") == TOTAL_LEVELS * 3 - 1
+    assert shown.count("🚪 ?") == TOTAL_LEVELS * ROOMS_PER_LEVEL - 1
     assert "⚔️ enemy" in shown
     assert "gold" not in " ".join(shown)
+
+
+def test_the_map_never_shows_the_layout_of_the_unexplored():
+    app = started()
+    secret = f"{GOLD_BY_LEVEL[1]} gold"
+    assert secret not in rendered(app)
+    assert set(labels(app)) == {"🚪 ?"}
+
+
+def test_finding_a_wall_still_says_nothing_about_the_gold():
+    app = started()
+    secret = f"{GOLD_BY_LEVEL[1]} gold"
+    wall = door_of_type(app, 1, RoomType.WALL)
+    app.button(key=f"door-1-{wall}").click().run()
+    assert secret not in rendered(app)
+    assert labels(app).count("🚪 ?") == TOTAL_LEVELS * ROOMS_PER_LEVEL - 1
+    assert labels(app).count("🧱 wall") == 1
+
+
+def test_a_discovered_wall_shows_itself_and_shuts_for_good():
+    app = started()
+    wall = door_of_type(app, 1, RoomType.WALL)
+    app.button(key=f"door-1-{wall}").click().run()
+    assert "🧱 wall" in labels(app)
+    assert app.button(key=f"door-1-{wall}").disabled is True
+    assert "wall" in app.warning[-1].value.lower()
+
+
+def test_a_wall_costs_no_life_points_and_no_gold():
+    app = started()
+    wall = door_of_type(app, 1, RoomType.WALL)
+    app.button(key=f"door-1-{wall}").click().run()
+    metrics = {metric.label: metric.value for metric in app.metric}
+    assert metrics["Gold"] == "0"
+    assert metrics["Life points"] == "10"
+    assert game_of(app).current_level == 1
+
+
+def test_the_rest_of_the_level_is_still_playable_after_a_wall():
+    app = started()
+    wall = door_of_type(app, 1, RoomType.WALL)
+    app.button(key=f"door-1-{wall}").click().run()
+    gold = door_of_type(app, 1, RoomType.GOLD)
+    app.button(key=f"door-1-{gold}").click().run()
+    metrics = {metric.label: metric.value for metric in app.metric}
+    assert metrics["Gold"] == str(GOLD_BY_LEVEL[1])
+
+
+def test_a_whole_castle_run_walks_into_every_wall_and_still_wins():
+    app = started()
+    for level in range(1, TOTAL_LEVELS + 1):
+        wall = door_of_type(app, level, RoomType.WALL)
+        app.button(key=f"door-{level}-{wall}").click().run()
+        play_level(app, level)
+    assert game_of(app).is_victory() is True
+    assert ("Final score", "100 gold") in [
+        (m.label, m.value) for m in app.metric
+    ]
 
 
 def test_opening_the_gold_room_updates_the_hud_and_the_map():

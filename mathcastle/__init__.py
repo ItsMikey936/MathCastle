@@ -19,7 +19,7 @@ from mathcastle.game import Game
 from mathcastle.level import Level
 from mathcastle.player import Player
 from mathcastle.problem import MathProblem, ProblemGenerator
-from mathcastle.rooms import EmptyRoom, EnemyRoom, GoldRoom, Room
+from mathcastle.rooms import EmptyRoom, EnemyRoom, GoldRoom, Room, WallRoom
 
 __all__ = [
     "ENEMY_DAMAGE_BY_LEVEL",
@@ -43,4 +43,5 @@ __all__ = [
     "ProblemGenerator",
     "Room",
     "RoomType",
+    "WallRoom",
 ]

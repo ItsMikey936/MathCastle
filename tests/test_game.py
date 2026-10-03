@@ -6,6 +6,7 @@ import pytest
 
 from mathcastle.constants import (
     GOLD_BY_LEVEL,
+    ROOMS_PER_LEVEL,
     STARTING_LIFE_POINTS,
     TIME_LIMIT,
     TOTAL_LEVELS,
@@ -84,8 +85,10 @@ def test_starting_again_throws_the_previous_run_away():
 
 def test_opening_a_door_on_an_undealt_game_deals_it_by_itself():
     game = Game(rng=random.Random(3))
+    assert game.status is GameState.READY
     game.choose_room(0)
-    assert game.status is GameState.IN_PROGRESS
+    assert game.status is not GameState.READY
+    assert game.status in (GameState.IN_PROGRESS, GameState.IN_COMBAT)
     assert len(game.levels) == TOTAL_LEVELS
 
 
@@ -104,6 +107,59 @@ def test_the_empty_room_changes_nothing():
     assert outcome is Outcome.NOTHING
     assert game.player.gold == 0
     assert game.current_level == 1
+
+
+def test_a_wall_costs_nothing_and_keeps_the_player_on_the_level():
+    game = new_game()
+    outcome = game.choose_room(find_door(game, RoomType.WALL))
+    assert outcome is Outcome.WALL
+    assert game.player.life_points == STARTING_LIFE_POINTS
+    assert game.player.gold == 0
+    assert game.current_level == 1
+    assert game.status is GameState.IN_PROGRESS
+
+
+def test_a_discovered_wall_cannot_be_chosen_again():
+    game = new_game()
+    index = find_door(game, RoomType.WALL)
+    game.choose_room(index)
+    assert game.level().get_room(index).revealed is True
+    assert game.level().get_room(index).visited is False
+    with pytest.raises(ValueError):
+        game.choose_room(index)
+
+
+def test_a_wall_only_lifts_its_own_fog():
+    game = new_game()
+    level = game.level()
+    game.choose_room(find_door(game, RoomType.WALL))
+    revealed = [room for room in level.rooms if room.revealed]
+    assert len(revealed) == 1
+    assert revealed[0].room_type is RoomType.WALL
+    assert game.level().available_rooms() == [
+        index for index, room in enumerate(level.rooms) if not room.revealed
+    ]
+
+
+def test_a_wall_does_not_stop_the_player_from_reaching_the_next_level():
+    game = new_game()
+    game.choose_room(find_door(game, RoomType.WALL))
+    game.choose_room(enemy_door(game))
+    solve_current_problem(game)
+    assert game.current_level == 2
+
+
+def test_the_gold_is_still_reachable_after_finding_the_wall_first():
+    game = new_game()
+    game.choose_room(find_door(game, RoomType.WALL))
+    game.choose_room(gold_door(game))
+    assert game.player.gold == GOLD_BY_LEVEL[1]
+
+
+def test_the_narration_for_a_wall_calls_it_a_dead_end():
+    game = new_game()
+    outcome = game.choose_room(find_door(game, RoomType.WALL))
+    assert "wall" in game.narrate(outcome).lower()
 
 
 def test_opening_the_enemy_door_starts_the_fight():
@@ -130,9 +186,9 @@ def test_a_door_cannot_be_opened_twice():
         game.choose_room(index)
 
 
-def test_there_is_no_door_outside_the_three_positions():
+def test_there_is_no_door_outside_the_four_positions():
     game = new_game()
-    for index in (-1, 3, 99):
+    for index in (-1, ROOMS_PER_LEVEL, 99):
         with pytest.raises(IndexError):
             game.choose_room(index)
 

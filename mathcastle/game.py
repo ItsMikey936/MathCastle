@@ -11,7 +11,6 @@ import time
 
 from mathcastle.challenge import Challenge, Clock
 from mathcastle.constants import (
-    ROOMS_PER_LEVEL,
     STARTING_LIFE_POINTS,
     TOTAL_LEVELS,
 )
@@ -80,18 +79,19 @@ class Game:
         """Open the door at ``index`` and report what was behind it.
 
         Raises ValueError when the door cannot be chosen because the game
-        is not accepting doors, or because this one is already open.
+        is not accepting doors, or because it is already known to be shut.
         Raises IndexError when there is no door at that position.
         """
         if self.status is GameState.READY:
             self.start_new_game()
         if self.status is not GameState.IN_PROGRESS:
             raise ValueError("doors cannot be chosen right now")
-        if not 0 <= index < ROOMS_PER_LEVEL:
+        level = self.level()
+        if not 0 <= index < len(level.rooms):
             raise IndexError(f"there is no door at position {index}")
-        room = self.level().get_room(index)
-        if room.visited:
-            raise ValueError(f"door {index} has already been opened")
+        room = level.get_room(index)
+        if not room.is_choosable:
+            raise ValueError(f"door {index} is already known to be shut")
         self._last_room = room
         outcome = room.enter(self._player)
         if outcome is Outcome.CHALLENGE:
@@ -182,6 +182,8 @@ class Game:
             return f"You find {amount} gold coins. Total: {self._player.gold}."
         if outcome is Outcome.NOTHING:
             return "An empty room. Nothing to take, and no way onward."
+        if outcome is Outcome.WALL:
+            return "A dead end: a wall of stone blocks this passage."
         if outcome is Outcome.INVALID:
             return "That is not a whole number. The clock keeps running."
         if outcome is Outcome.COMBAT_WON:

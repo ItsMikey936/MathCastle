@@ -9,10 +9,9 @@ from __future__ import annotations
 import streamlit as st
 
 from mathcastle.constants import STARTING_LIFE_POINTS, TOTAL_LEVELS
-from mathcastle.enums import GameState, Outcome, RoomType
+from mathcastle.enums import GameState, Outcome
 from mathcastle.game import Game
 from mathcastle.level import Level
-from mathcastle.rooms import Room
 
 STATE_KEY = "game"
 FEEDBACK_KEY = "feedback"
@@ -23,6 +22,7 @@ MAX_LOG_ENTRIES = 25
 _TONES = {
     Outcome.GOLD: "success",
     Outcome.NOTHING: "info",
+    Outcome.WALL: "warning",
     Outcome.CHALLENGE: "warning",
     Outcome.INVALID: "warning",
     Outcome.COMBAT_WON: "success",
@@ -103,10 +103,11 @@ class StreamlitUI:
         self._render_new_game_button()
 
     def render_map(self) -> None:
-        """Draw the castle: four levels of three doors each.
+        """Draw the castle: four levels of four doors each.
 
-        Doors that are still closed show nothing but a question mark, so
-        their type stays hidden. Open doors reveal what was behind them.
+        The doors decide what they say. A fogged one shows a question
+        mark and nothing more, so the interface never has to know, let
+        alone reveal, what is behind a door the player has not opened.
         """
         st.subheader("🗺️ Castle map")
         for level in self.game.levels:
@@ -126,9 +127,9 @@ class StreamlitUI:
         """Offer the unopened doors of the current level."""
         st.subheader(f"Level {self.game.current_level}: choose a door")
         st.caption(
-            "Behind these doors are one gold room, one empty room and one "
-            "enemy. Only the enemy's door leads onward, and opening it "
-            "cannot be undone."
+            "Behind these doors are one gold room, one empty room, one "
+            "wall and one enemy. Only the enemy's door leads onward, and "
+            "opening it cannot be undone."
         )
 
     def render_challenge(self) -> None:
@@ -171,29 +172,17 @@ class StreamlitUI:
         """Draw one door, clickable only while it is a real choice."""
         room = level.get_room(index)
         playable = (
-            not room.visited
+            room.is_choosable
             and level.number == self.game.current_level
             and self.game.status is GameState.IN_PROGRESS
         )
         if st.button(
-            self._door_label(room),
+            room.public_label(),
             key=f"door-{level.number}-{index}",
             disabled=not playable,
             width="stretch",
         ):
             self._choose(index)
-
-    def _door_label(self, room: Room) -> str:
-        """Name a door without leaking the type of a closed one."""
-        if not room.visited:
-            return "🚪 ?"
-        if room.room_type is RoomType.GOLD:
-            return f"💰 {getattr(room, 'gold_amount', 0)} gold"
-        if room.room_type is RoomType.EMPTY:
-            return "🫙 empty"
-        if getattr(room, "defeated", False):
-            return "⚔️ enemy defeated"
-        return "⚔️ enemy"
 
     def _choose(self, index: int) -> None:
         """Open a door, narrate it, and redraw."""

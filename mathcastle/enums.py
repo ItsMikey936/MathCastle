@@ -18,10 +18,12 @@ class GameState(Enum):
 
 
 class RoomType(Enum):
-    """Kind of room. The player only learns it by entering."""
+    """Kind of room. The player only learns it by entering, or by
+    discovering that it is a wall."""
 
     GOLD = "gold"
     EMPTY = "empty"
+    WALL = "wall"
     ENEMY = "enemy"
 
 
@@ -36,6 +38,7 @@ class Outcome(Enum):
     CHALLENGE = "challenge"
     GOLD = "gold"
     NOTHING = "nothing"
+    WALL = "wall"
     INVALID = "invalid"
     COMBAT_WON = "combat_won"
     COMBAT_LOST = "combat_lost"
